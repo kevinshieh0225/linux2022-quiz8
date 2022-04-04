@@ -60,12 +60,11 @@ void *memchr_opt(const void *src_void, int c, size_t length)
             // if find the char
             if (DETECT_CHAR(*asrc, mask) == 0) {
                 src = (unsigned char *) asrc;
-                while (1) {
-                    if (*src == d)
-                        return (void *) src;
+                while (*src != d)
                     src++;
-                }
+                return (void *) src;
             }
+            length -= LBLOCKSIZE;
             asrc++;
         }
 
