@@ -57,7 +57,7 @@ void *memchr_opt(const void *src_void, int c, size_t length)
             mask = (mask << i) | mask;
 
         while (length >= LBLOCKSIZE) {
-            // if find the char
+            // if find the char, check which char is the target address.
             if (DETECT_CHAR(*asrc, mask) == 0) {
                 src = (unsigned char *) asrc;
                 while (*src != d)
