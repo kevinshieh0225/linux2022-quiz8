@@ -24,6 +24,9 @@ struct element {
     uintptr_t idx;
 };
 
+/* tail for enqueue
+ * head for dequeue
+ */
 struct lfring {
     ringidx_t head;
     ringidx_t tail ALIGNED(CACHE_LINE);
@@ -78,10 +81,11 @@ static inline bool before(ringidx_t a, ringidx_t b)
 }
 
 /* renew loc with neu
- * if neu < old, then no need to update
+ * if neu < old, means that the process is too old and no need to update, 
+ * return old instead.
  * else:
  *      check if anyone have update the loc which make loc != &old
- *      if no one update, assign neu to loc, and return neu
+ *      if no one update, assign loc with neu, and return neu
  *      if someone has already update, assign new loc to &old, and compare again
  * 
  * # Multiple Producers Second Step
@@ -190,7 +194,7 @@ static inline ringidx_t find_tail(lfring_t *lfr, ringidx_t head, ringidx_t tail)
      * Scan ring for new elements that have been written but not released.
      */
     ringidx_t mask = lfr->mask;
-    ringidx_t size = mask + 1; /* KKK */
+    ringidx_t size = -mask; /* KKK */
     
     while (before(tail, head + size) &&
            __atomic_load_n(&lfr->tail, __ATOMIC_ACQUIRE) == tail) {
