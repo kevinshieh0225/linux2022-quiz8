@@ -185,27 +185,75 @@ restart:
     return (uint32_t) actual;
 }
 
+
+/* find_tail: check current lfr->ring whether 
+ *            there is someone enqueueing
+ * 
+ * 1. Because single producer will store lfr->ring, lfr->tail
+ *    right in-time, so just check lfr->tail again
+ * 
+ * 2. For Multi-producer, Scan ring for new elements that
+ *    have been written but not released.
+ * 
+ *    2.1 while tail is before (head + size) &&
+ *              lfr->ring[tail & mask].idx is actually loaded
+ *              renew the tail rightaway
+ * 
+ * 3. cond_update for &lfr->tail and tail
+ *    maybe as we are finding tail, the producer have already 
+ *    done his job
+ */
 static inline ringidx_t find_tail(lfring_t *lfr, ringidx_t head, ringidx_t tail)
 {
+    /* 1. Because single producer will store lfr->ring, lfr->tail
+     *    right in-time, so just check lfr->tail again
+     */
     if (lfr->flags & LFRING_FLAG_SP) /* single-producer enqueue */
         return __atomic_load_n(&lfr->tail, __ATOMIC_ACQUIRE);
 
-    /* Multi-producer enqueue.
+    /* 2. Multi-producer enqueue.
      * Scan ring for new elements that have been written but not released.
      */
     ringidx_t mask = lfr->mask;
     ringidx_t size = mask + 1; /* KKK */
     
+    /* 2.1 while tail is before (head + size) &&
+     *           lfr->ring[tail & mask].idx is actually loaded
+     *           renew the tail rightaway
+     */
     while (before(tail, head + size) &&
            __atomic_load_n(&lfr->ring[tail & mask].idx, __ATOMIC_RELAXED) ==
             tail) {
         tail++;
     }
+
+    /* 3. cond_update for &lfr->tail and tail
+     *    maybe as we are finding tail, the producer have already 
+     *    done his job
+     */
     tail = cond_update(&lfr->tail, tail);
     return tail;
 }
 
-/* Dequeue elements from head */
+/* Dequeue elements from head 
+ * 
+ * 1. assign actual how many element are dequeueing
+ *    (MIN(the element remain in queue, the number we tempt))
+ *    1.1 if Ring buffer is empty, scan for new but unreleased elements
+ *    1.2 if still empty, return 0
+ * 
+ * 2. copy the value from lfr->ring to elems
+ * 
+ * 3. if single-consumer, just renew &lfr->head and return
+ * 
+ * 4. use '__atomic_compare_exchange_n' to ensure
+ *    we successfully renew &lfr->head with (head + actual)
+ *  
+ * @lfr : lfring struct
+ * @elem : the element array after dequeueing to save to
+ * @n_elems : the number of element to dequeue
+ * @index : the last element we dequeue  
+ */
 uint32_t lfring_dequeue(lfring_t *lfr,
                         void **restrict elems,
                         uint32_t n_elems,
@@ -216,23 +264,30 @@ uint32_t lfring_dequeue(lfring_t *lfr,
     ringidx_t head = __atomic_load_n(&lfr->head, __ATOMIC_RELAXED);
     ringidx_t tail = __atomic_load_n(&lfr->tail, __ATOMIC_ACQUIRE);
     do {
+        // 1. assign actual how many element are dequeueing
         actual = MIN((intptr_t)(tail - head), (intptr_t) n_elems);
         if (UNLIKELY(actual <= 0)) {
-            /* Ring buffer is empty, scan for new but unreleased elements */
+            // 1.1 if Ring buffer is empty, scan for new but unreleased elements
             tail = find_tail(lfr, head, tail);
             actual = MIN((intptr_t)(tail - head), (intptr_t) n_elems);
+            // 1.2 if still empty, return 0
             if (actual <= 0)
                 return 0;
         }
+
+        // 2. copy the value from lfr->ring to elems
         for (uint32_t i = 0; i < (uint32_t) actual; i++)
             elems[i] = lfr->ring[(head + i) & mask].ptr;
         smp_fence(LoadStore);                        // Order loads only
+
+        // 3. if single-consumer, just renew &lfr->head and return
         if (UNLIKELY(lfr->flags & LFRING_FLAG_SC)) { /* Single-consumer */
             __atomic_store_n(&lfr->head, head + actual, __ATOMIC_RELAXED);
             break;
         }
 
         /* else: lock-free multi-consumer */
+        // 4. ensure we successfully renew &lfr->head with (head + actual)
     } while (!__atomic_compare_exchange_n(
         &lfr->head, &head, /* Updated on failure */
         /* HHH */ head + actual,

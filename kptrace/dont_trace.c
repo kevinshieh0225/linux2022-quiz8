@@ -65,6 +65,25 @@ static void check(void)
     }
 }
 
+
+/* periodic_routine : 
+ * 
+ * 假如目前 dont_trace 核心模組被載入(loaded 全域變數)
+ * 那我就每過一個單位時間執行一次 check。
+ * 
+ * 特別注意流程所述：Once the module is attached to the kernel,
+ * the module’s “core” function will run periodically through 
+ * the advantage of workqueues. Specifically, the module 
+ * runs every JIFFIES_DELAY
+ * 
+ * int queue_delayed_work  (struct workqueue_struct *wq,
+ *                          struct delayed_work *dwork,
+ *                          unsigned long delay);
+ * 
+ * @wq : workqueue to use
+ * @dwork : delayable work to queue
+ * @delay : number of jiffies to wait before queueing
+ */
 static void periodic_routine(struct work_struct *ws)
 {
     if (likely(loaded))
