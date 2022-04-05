@@ -58,14 +58,12 @@ void *memchr_opt(const void *src_void, int c, size_t length)
 
         while (length >= LBLOCKSIZE) {
             // if find the char, check which char is the target address.
-            if (DETECT_CHAR(*asrc, mask) == 0) {
-                src = (unsigned char *) asrc;
-                while (*src != d)
-                    src++;
-                return (void *) src;
+            if (DETECT_CHAR(*asrc, mask) != 0)
+                break;
+            else {
+                length -= LBLOCKSIZE;
+                asrc++;
             }
-            length -= LBLOCKSIZE;
-            asrc++;
         }
 
         /* If there are fewer than LBLOCKSIZE characters left, then we resort to

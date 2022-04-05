@@ -1,4 +1,4 @@
 String after |.| is - |.csie.ncku.edu.tw|
-String after |w| is - |w|
-String after |n| is - |ncku.edu.tw|
-String after |m| is - |memchr/main.o|
+String after |w| is - |wiki.csie.ncku.edu.tw|
+String after |u| is - |u.edu.tw|
+String after |m| is - |(null)|

@@ -194,10 +194,11 @@ static inline ringidx_t find_tail(lfring_t *lfr, ringidx_t head, ringidx_t tail)
      * Scan ring for new elements that have been written but not released.
      */
     ringidx_t mask = lfr->mask;
-    ringidx_t size = -mask; /* KKK */
+    ringidx_t size = mask + 1; /* KKK */
     
     while (before(tail, head + size) &&
-           __atomic_load_n(&lfr->tail, __ATOMIC_ACQUIRE) == tail) {
+           __atomic_load_n(&lfr->ring[tail & mask].idx, __ATOMIC_RELAXED) ==
+            tail) {
         tail++;
     }
     tail = cond_update(&lfr->tail, tail);

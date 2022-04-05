@@ -6,7 +6,7 @@ int main()
     const char str[] = "http://wiki.csie.ncku.edu.tw";
     const char ch1 = '.';
     const char ch2 = 'w';
-    const char ch3 = 'n'; // last char
+    const char ch3 = 'u';
     const char ch4 = 'm'; // non exist char
 
     char *ret1 = memchr_opt(str, ch1, strlen(str));
